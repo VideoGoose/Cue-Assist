@@ -1,0 +1,660 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="disguise-plugin-window-size" content="300,420">
+<meta name="disguise-plugin-window-min-size" content="220,220">
+<meta name="disguise-plugin-window-resizable" content="true">
+<title>Cue Assist v0.9.3</title>
+<style>
+  :root {
+    --bg: #15171a; --panel: #1d2024; --line: #2c3036; --text: #d8dce2; --dim: #8a929c;
+    --accent: #f2b33d; --live: #3ecf6e; --warn: #e5534b; --field: #111316; --info: #5aa9e6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 11px/1.3 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { display: flex; flex-direction: column; }
+  header { display: flex; gap: 4px; align-items: center; padding: 4px 6px; background: var(--panel);
+    border-bottom: 1px solid var(--line); }
+  .title { font-weight: 700; }
+  .ver { font: 600 10px/1 ui-monospace, Menlo, Consolas, monospace; color: #111; background: var(--accent);
+    padding: 2px 4px; border-radius: 3px; }
+  .ver.stale { background: var(--warn); color: #fff; }
+  .spacer { flex: 1; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); margin-left: 2px; }
+  .dot.on { background: var(--live); box-shadow: 0 0 5px var(--live); }
+  .dot.err { background: var(--warn); }
+  button { background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 3px;
+    font: inherit; padding: 3px 6px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--dim); }
+  button:disabled { opacity: .45; cursor: default; }
+  header button { padding: 1px 5px; }
+  #cog.open { border-color: var(--accent); color: var(--accent); }
+
+  #settings { display: none; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #settings.show { display: block; }
+  .grid { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 4px 6px; align-items: center; }
+  .grid label { color: var(--dim); white-space: nowrap; }
+  .grid .wide { grid-column: span 3; }
+  select { width: 100%; min-width: 0; background: var(--field); color: var(--text); border: 1px solid var(--line);
+    border-radius: 3px; font: 11px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 2px 3px; }
+  select:focus { outline: none; border-color: var(--accent); }
+  input { width: 100%; min-width: 0; background: var(--field); color: var(--text); border: 1px solid var(--line);
+    border-radius: 3px; font: 11px ui-monospace, Menlo, Consolas, monospace; padding: 3px 5px; }
+  input:focus { outline: none; border-color: var(--accent); }
+  input.bad { border-color: var(--warn); }
+  input:disabled { opacity: .45; }
+  details { margin-top: 5px; color: var(--dim); }
+  details summary { cursor: pointer; }
+  details .grid { margin-top: 4px; }
+  .srow { display: flex; gap: 4px; margin-top: 6px; align-items: center; }
+  .srow .msg { flex: 1; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  #warn { display: none; margin: 6px 6px 0; padding: 5px 7px; border-radius: 3px; font-weight: 700;
+    color: #fff; background: var(--warn); text-align: center; animation: blink 1s steps(1, end) infinite; }
+  #warn.show { display: block; }
+  #warn small { display: block; font-weight: 400; opacity: .9; }
+  @keyframes blink { 50% { background: #5a1f1c; color: #f6c8c5; } }
+
+  .ctx { padding: 4px 6px 0; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ctx b { color: var(--text); font-weight: 600; }
+  #eosu { padding-top: 1px; }
+  #eosu .live { color: var(--accent); } #eosu .blind { color: var(--info); } #eosu .off { color: var(--warn); }
+  .actions { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 4px; padding: 6px; }
+  #after { font-weight: 700; padding: 5px 6px; }
+  .actions .wide { grid-column: 1 / -1; }
+  .op.miss { color: var(--accent); }
+  #after.live { border-color: var(--accent); color: var(--accent); }
+  #after.blind { border-color: var(--info); color: var(--info); }
+  .actions button { padding: 5px 4px; font-weight: 600; }
+  #write:not(:disabled) { border-color: var(--live); color: var(--live); }
+  #del:not(:disabled) { border-color: var(--warn); color: var(--warn); }
+  #del.confirm { background: var(--warn); color: #fff; }
+
+  #readout { flex: 1; min-height: 60px; margin: 0 6px; padding: 4px 6px; overflow: auto; border: 1px solid var(--line);
+    border-radius: 3px; background: var(--field); font: 10px/1.45 ui-monospace, Menlo, Consolas, monospace; }
+  #readout .empty { color: var(--dim); }
+  #readout .hd { color: var(--dim); text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+  #readout .hd:first-child { margin-top: 0; }
+  .op { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .op.add { color: var(--live); } .op.lbl { color: var(--info); } .op.del { color: var(--warn); }
+  .op.note { color: var(--accent); white-space: normal; }
+  .op .t { color: var(--dim); }
+  #log { flex: 0 0 auto; max-height: 30%; min-height: 28px; margin: 6px 0 0; padding: 4px 6px; overflow: auto;
+    border-top: 1px solid var(--line); font: 10px/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--dim);
+    white-space: pre-wrap; }
+  #log .ok { color: var(--live); } #log .bad { color: var(--warn); } #log .hd { color: var(--text); }
+  #log .warn { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">Cue Assist</span><span class="ver" id="ver">v0.9.3</span>
+  <span class="spacer"></span>
+  <button id="probe" title="Probe: dump the current track's cue entries (tags + notes) to the log">?</button>
+  <button id="target" title="Which Designer reads the timeline">this PC</button>
+  <button id="cog" title="Settings: Eos IP, cue list, disguise channel">&#x2699;</button>
+  <span class="dot" id="status" title="connecting…"></span>
+</header>
+
+<div id="settings">
+  <div class="grid">
+    <label for="ip">Eos IP</label><input id="ip" class="wide" placeholder="10.101.100.101" spellcheck="false">
+    <label for="clist" title="The Eos cue list the disguise cues are written to">Video list</label><input id="clist" placeholder="1" inputmode="numeric">
+    <label for="chan" title="Eos channel of the disguise fixture (the profile with Cue XX / YY / ZZ)">Channel</label><input id="chan" placeholder="e.g. 999" inputmode="numeric">
+    <label for="mlist" title="The main (lighting) cue list Compare checks the video list against">Main list</label><input id="mlist" placeholder="1" inputmode="numeric">
+    <label for="osc" title="Eos OSC TCP format: OSC 1.1 SLIP (port 3037) or OSC 1.0 packet length (port 3032)">OSC</label><select id="osc">
+      <option value="slip">v1.1 SLIP</option>
+      <option value="len">v1.0 packet length</option>
+    </select>
+  </div>
+  <details>
+    <summary>Advanced</summary>
+    <div class="grid">
+      <label for="port" title="Eos OSC TCP port: 3037 for OSC 1.1 SLIP, 3032 for OSC 1.0 packet length">TCP port</label><input id="port" placeholder="3037" inputmode="numeric">
+      <label for="umode" title="Eos user the commands run as (/eos/user/N). Eos local: the console's own OSC user, as Eos reports it (commands show on that user's command line). Number: the user typed beside it; 0 = background user, always in Live and never touches the programmer's command line. A user sitting in Blind or Setup records nothing.">User</label><select id="umode">
+        <option value="local">Eos local user</option>
+        <option value="num">Number</option>
+      </select>
+      <label for="user" title="Eos user number the commands run as when User is Number">User no.</label><input id="user" placeholder="0" inputmode="numeric">
+      <label for="pxx" title="Parameter names in the disguise fixture profile, as Eos shows them on the encoder wheels. Write checks them on the channel before recording.">Cue XX</label><input id="pxx" placeholder="Cue">
+      <label for="pyy">Cue YY</label><input id="pyy" placeholder="Cue 2">
+      <label for="pzz">Cue ZZ</label><input id="pzz" placeholder="Cue 3">
+    </div>
+  </details>
+  <div class="srow">
+    <button id="test" title="Connect to Eos and ask for its version">Test</button>
+    <span class="msg" id="testMsg"></span>
+    <button id="close">Done</button>
+  </div>
+</div>
+
+<div id="warn" title="The CUE tags on this track changed since the plugin last synced Eos">
+  &#x26A0; TIMELINE CUES CHANGED<small id="warnWhy">Refresh, then Write / Delete</small>
+</div>
+<div class="ctx" id="ctx"></div>
+<div class="ctx" id="eosu" title="Eos user the plugin's commands run as, and its mode. Checked every 5 s."></div>
+<div class="actions">
+  <button id="refresh" title="Read the timeline and the Eos cue list, and show what Write / Delete would do. Changes nothing.">Refresh</button>
+  <button id="write" disabled title="Add the missing cues to Eos and update labels">Write</button>
+  <button id="del" disabled title="Delete Eos cues in this list that have no CUE tag on the timeline">Delete</button>
+  <button id="after"></button>
+  <button id="compare" class="wide" title="Read-only: check every cue in the video list against the main list by number, and list the video cues the main list has no cue for"></button>
+</div>
+<div id="readout"><div class="empty">Press Refresh to compare the timeline with Eos.</div></div>
+<pre id="log"></pre>
+
+<script>
+(function () {
+  'use strict';
+  var VERSION = '0.9.3';
+  var REG_NAME = 'gus_ca';               // registered fresh from __init__.py each time the window opens
+  var AUTO_NAME = 'gus_cueassist';       // the same code, auto-loaded by Designer at startup
+  var STEP_MS = 50;                      // how often a running Eos job is stepped (see job())
+  var POLL_MS = 3000;                    // timeline check for the warning (Designer only, no Eos traffic)
+  var $ = function (id) { return document.getElementById(id); };
+  var apiBase = '', mod = REG_NAME, busy = false, plan = null, track = null, sig = null, tl = null, cmp = null;
+  var store = { get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+                set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+  function status(cls, txt) { $('status').className = 'dot ' + cls; $('status').title = txt; }
+  function log(text, cls) {
+    var s = document.createElement('span'); if (cls) s.className = cls;
+    s.textContent = text + '\n'; $('log').appendChild(s); $('log').scrollTop = 1e9;
+  }
+
+  // ---- settings -----------------------------------------------------------
+  var FIELDS = ['ip', 'port', 'osc', 'clist', 'mlist', 'chan', 'umode', 'user', 'pxx', 'pyy', 'pzz'];
+  // Cue / Cue 2 / Cue 3: the XX / YY / ZZ parameters of disguise d3_Server_Timeline_Module_v14.
+  // User 0 is Eos' background user: always in Live, never the programmer's command line.
+  // umode 'local' (the default) sends 'local' instead, and Python uses the console's own OSC user.
+  // OSC 1.1 SLIP on 3037 is the default; Eos takes OSC 1.0 packet-length framing on 3032.
+  var DEFAULTS = { port: '3037', osc: 'slip', clist: '1', mlist: '1', umode: 'local', user: '0', pxx: 'Cue', pyy: 'Cue 2', pzz: 'Cue 3' };
+  var OSC_PORTS = { slip: '3037', len: '3032' };
+  var cfg = {};
+  try { cfg = JSON.parse(store.get('ca.cfg') || '{}') || {}; } catch (e) { cfg = {}; }
+  // Early defaults that never matched a real profile, and the old blank user
+  [['pxx', 'Cue XX'], ['pyy', 'Cue YY'], ['pzz', 'Cue ZZ'], ['user', '']].forEach(function (o) {
+    if (cfg[o[0]] === o[1]) delete cfg[o[0]];
+  });
+  // The framing used to follow the port: a saved 3032 meant OSC 1.0.
+  if (cfg.osc === undefined && cfg.port === '3032') cfg.osc = 'len';
+  FIELDS.forEach(function (k) {
+    $(k).value = cfg[k] !== undefined ? cfg[k] : (DEFAULTS[k] || '');
+    $(k).oninput = $(k).onchange = function () {
+      // Picking an OSC version moves the port with it, if the port was the other one's default.
+      if (k === 'osc') {
+        var other = OSC_PORTS[$('osc').value === 'slip' ? 'len' : 'slip'];
+        if (val('port') === other) { $('port').value = OSC_PORTS[$('osc').value]; cfg.port = $('port').value; }
+      }
+      cfg[k] = $(k).value.trim(); store.set('ca.cfg', JSON.stringify(cfg));
+      plan = null; cmp = null; render(); checkCfg();
+      if (['ip', 'port', 'osc', 'umode', 'user'].indexOf(k) >= 0) { eosState = null; eosNext = 0; showEos(); }
+    };
+  });
+  function val(k) { return ($(k).value || '').trim() || DEFAULTS[k] || ''; }
+  function localUser() { return val('umode') === 'local'; }
+  function userArg() { return localUser() ? 'local' : val('user'); }
+  function checkCfg() {
+    var bad = {
+      ip: !val('ip'),
+      clist: !/^\d+$/.test(val('clist')),
+      mlist: !/^\d+$/.test(val('mlist')) || val('mlist') === val('clist'),
+      chan: !/^\d+$/.test(val('chan')),
+      port: !/^\d+$/.test(val('port')),
+      user: !localUser() && !/^\d*$/.test(val('user'))
+    };
+    $('user').disabled = localUser();
+    Object.keys(bad).forEach(function (k) { $(k).classList.toggle('bad', bad[k]); });
+    return bad;
+  }
+  function openSettings(on) { $('settings').classList.toggle('show', on); $('cog').classList.toggle('open', on); }
+  $('cog').onclick = function () { openSettings(!$('settings').classList.contains('show')); };
+  $('close').onclick = function () { openSettings(false); };
+
+  // ---- Designer API (same discovery as Layer Tools) -----------------------
+  function http(method, path, body, base) {
+    var url = (base === undefined ? apiBase : base) + path;
+    return fetch(url, { method: method, headers: body ? { 'Content-Type': 'application/json' } : {},
+                        body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) {
+        return r.text().then(function (t) {
+          if (!r.ok) throw new Error('HTTP ' + r.status + ' from ' + path + (t ? ' — ' + t.replace(/\s+/g, ' ').slice(0, 200) : ''));
+          try { return JSON.parse(t); } catch (e) { throw new Error('not JSON from ' + url); }
+        });
+      }, function (e) { throw new Error('no response from ' + url + ' (' + e.message + ')'); });
+  }
+  function normBase(s) {
+    s = (s || '').trim().replace(/\/+$/, '');
+    return !s ? '' : /^https?:\/\//.test(s) ? s : 'http://' + s;
+  }
+  var target = store.get('ca.target') === 'director' ? 'director' : 'local';
+  function candidateBases() {
+    var qs = new URLSearchParams(location.search), out = [];
+    var local = [];
+    // 127.0.0.1 first: 'localhost' cost ~2 s per request (IPv6 tried first)
+    // and the machine's <name>.local ~4 s, against 20 ms by IP (27 Oct).
+    ['127.0.0.1', 'localhost'].forEach(function (h) {
+      ['', ':81', ':8080'].forEach(function (p) { local.push('http://' + h + p); });
+    });
+    if (target === 'local') out = out.concat(local);
+    ['director', 'd3', 'host'].forEach(function (k) { if (qs.get(k)) out.push(normBase(qs.get(k))); });
+    if (store.get('ca.api.' + target)) out.push(normBase(store.get('ca.api.' + target)));
+    if (/^https?:$/.test(location.protocol)) out.push('');
+    var h = /^https?:$/.test(location.protocol) ? location.hostname : 'localhost';
+    [80, 81, 8080].forEach(function (p) { out.push('http://' + h + (p === 80 ? '' : ':' + p)); });
+    return out.filter(function (b, i) { return out.indexOf(b) === i; });
+  }
+  function findApi(list) {
+    if (!list.length) return Promise.reject(new Error('Designer\'s API not found'));
+    return http('GET', '/api/session/status/session', undefined, list[0])
+      .then(function () { apiBase = list[0]; store.set('ca.api.' + target, apiBase); },
+            function () { return findApi(list.slice(1)); });
+  }
+  function pyArg(v) { return v === null ? 'None' : typeof v === 'number' ? String(v) : 'u' + JSON.stringify(String(v)); }
+  function call(fn) {
+    var args = [].slice.call(arguments, 1).map(pyArg).join(', ');
+    return http('POST', '/api/session/python/execute', { moduleName: mod, script: 'return ' + fn + '(' + args + ')' })
+      .then(function (r) {
+        var rv = r.returnValue;
+        for (var i = 0; i < 3 && typeof rv === 'string'; i++) { try { rv = JSON.parse(rv); } catch (e) { break; } }
+        if (rv && typeof rv === 'object') return rv;
+        throw new Error(fn + '() in ' + mod + ' gave no result ' + JSON.stringify(r.status || r).slice(0, 300));
+      });
+  }
+  // Eos work runs as a job in the helper: start() returns at once and step()
+  // carries it on with whatever Eos has sent, so no single call holds
+  // Designer's main thread for more than a few ms (it used to freeze Designer
+  // for 0.7-4 s per Refresh / Write / Delete).
+  function job(kind) {
+    var args = [].slice.call(arguments);
+    function wait(r) {
+      if (!r.ok || !r.running) return r;
+      if (r.stage) status('on', r.stage);
+      return new Promise(function (res) { setTimeout(res, STEP_MS); })
+        .then(function () { return call('step'); }).then(wait);
+    }
+    return call.apply(null, ['start'].concat(args)).then(wait).then(function (r) {
+      status('on', 'connected');
+      return r;
+    });
+  }
+  function register() {
+    return fetch('__init__.py?' + Date.now()).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function (src) {
+      return http('POST', '/api/session/python/registermodule', { moduleName: REG_NAME, contents: src });
+    }).then(function (r) {
+      if (r && r.status && r.status.code) throw new Error(JSON.stringify(r.status));
+      mod = REG_NAME;
+    }).catch(function (e) {
+      log('register from folder failed (' + e.message + ') → using auto-loaded ' + AUTO_NAME, 'bad');
+      mod = AUTO_NAME;
+    });
+  }
+
+  // ---- out-of-sync warning ------------------------------------------------
+  // The timeline's cue signature at the last sync is kept per track. The
+  // warning blinks while the current signature differs (or there never was one).
+  function syncKey() { return 'ca.sync.' + (track || '?') + '|' + val('ip') + '|' + val('clist'); }
+  function markSynced(s) { if (s) { store.set(syncKey(), s); sig = s; } showWarn(); }
+  function showWarn() {
+    var last = store.get(syncKey()), show = !!sig && last !== sig;
+    $('warn').classList.toggle('show', show);
+    $('warnWhy').textContent = !last ? 'Never synced with Eos list ' + val('clist') + ' — Refresh, then Write / Delete'
+                                     : 'Changed since the last Write / Delete — Refresh, then Write / Delete';
+  }
+  // The CUE tags and notes come from Designer's REST API: Python's Tag.text
+  // came back empty on r34.2, the API has the value ("10.20.30"). The track is
+  // the one Designer's GUI shows (Python info()), looked up by name.
+  // entries: one line per time, "seconds<TAB>CUE value<TAB>note", the format
+  // the helper's plan / write / delete take.
+  function clean(t) { return String(t || '').replace(/[\t\r\n]+/g, ' ').trim(); }
+  function hash(t) {
+    var a = 1, b = 0;
+    for (var i = 0; i < t.length; i++) { a = (a + t.charCodeAt(i)) % 65521; b = (b + a) % 65521; }
+    return ('0000' + b.toString(16)).slice(-4) + ('0000' + a.toString(16)).slice(-4);
+  }
+  function readTimeline() {
+    return call('info').then(function (i) {
+      if (!i.ok) throw new Error(i.error);
+      var q = i.track ? '?name=' + encodeURIComponent(i.track) : '';
+      return http('GET', '/api/session/transport/annotations' + q);
+    }).then(function (r) {
+      var res = r.result || {}, an = res.annotations || {}, at = {};
+      function slot(t) { return at[t] || (at[t] = { time: t, tag: '', note: '' }); }
+      (an.tags || []).forEach(function (t) { if (String(t.type).toUpperCase() === 'CUE') slot(+t.time).tag = clean(t.value); });
+      (an.notes || []).forEach(function (n) { slot(+n.time).note = clean(n.text); });
+      var rows = Object.keys(at).map(function (k) { return at[k]; }).sort(function (a, b) { return a.time - b.time; });
+      var entries = rows.map(function (x) { return x.time + '\t' + x.tag + '\t' + x.note; }).join('\n');
+      return { track: res.name || '', entries: entries, sig: hash(entries),
+               count: rows.filter(function (x) { return x.tag; }).length,
+               rows: rows, tags: an.tags || [] };
+    });
+  }
+  function poll() {
+    if (document.hidden || busy) return;
+    readTimeline().then(function (t) {
+      status('on', 'connected');
+      if (t.track !== track) { track = t.track; plan = null; render(); }
+      if (plan && t.entries !== plan.entries) { plan = null; render(); log('timeline changed — Refresh again', 'warn'); }
+      tl = t; sig = t.sig; showCtx(t.count); showWarn();
+    }).catch(function (e) { status('err', 'timeline not readable: ' + e.message); });
+  }
+  setInterval(poll, POLL_MS);
+  document.addEventListener('visibilitychange', poll);
+
+  // ---- Eos user -----------------------------------------------------------
+  // Which Eos user the commands run as, and its Live/Blind, read from the
+  // open Eos connection every EOS_POLL_MS (opens one if needed). An
+  // unreachable IP holds Designer up to 0.75 s while connecting, so after a
+  // failure it waits EOS_RETRY_MS.
+  var EOS_POLL_MS = 5000, EOS_RETRY_MS = 30000;
+  var eosState = null, eosNext = 0, eosReady = false, eosPending = false;
+  function pollEos(force) {
+    if (!eosReady || eosPending) return;
+    if (!force && (document.hidden || busy || Date.now() < eosNext)) return;
+    if (checkCfg().ip || checkCfg().port) { eosState = null; showEos(); return; }
+    var key = link().join('|');
+    eosNext = Date.now() + EOS_POLL_MS; eosPending = true;
+    call.apply(null, ['eos_status'].concat(link())).then(function (r) {
+      if (!r.ok) throw new Error(r.error);
+      if (key === link().join('|')) eosState = { user: r.user, modes: r.modes || {} };
+      if (r.user == null) eosNext = Date.now() + 1000;   // a new connection: Eos names the user a moment later
+    }).catch(function (e) {
+      if (key !== link().join('|')) return;
+      eosNext = Date.now() + EOS_RETRY_MS;
+      eosState = { err: e.message };
+    }).then(function () { eosPending = false; showEos(); });
+  }
+  function showEos() {
+    var el = $('eosu'), local = localUser();
+    $('umode').options[0].textContent = 'Eos local user' + (eosState && eosState.user != null ? ' (' + eosState.user + ')' : '');
+    el.innerHTML = '';
+    if (!eosState) { el.textContent = 'Eos ' + (val('ip') || '—') + ' · checking…'; return; }
+    if (eosState.err) {
+      var x = document.createElement('span'); x.className = 'off';
+      x.textContent = 'Eos ' + val('ip') + ' · not connected'; el.title = eosState.err; el.appendChild(x); return;
+    }
+    var u = local ? eosState.user : val('user');
+    var mode = u != null ? eosState.modes[u] : null;
+    el.title = 'Commands run as Eos user ' + (u == null ? '?' : u) + '. The console\'s local OSC user is ' +
+      (eosState.user == null ? 'not reported yet' : eosState.user) + '. Checked every 5 s.';
+    el.appendChild(document.createTextNode('Eos ' + val('ip') + ' · user '));
+    var b = document.createElement('b'); b.textContent = u == null ? '…' : u; el.appendChild(b);
+    el.appendChild(document.createTextNode(local ? ' (local)' : (u === eosState.user ? ' (= local)' : '')));
+    if (mode) {
+      var m = document.createElement('span'); m.className = mode.toLowerCase();
+      el.appendChild(document.createTextNode(' · ')); m.textContent = mode; el.appendChild(m);
+    }
+  }
+  setInterval(pollEos, 1000);
+
+  // ---- readout ------------------------------------------------------------
+  function showCtx(n) {
+    $('ctx').innerHTML = '';
+    var b = document.createElement('b'); b.textContent = track || '(no track)';
+    $('ctx').appendChild(document.createTextNode('Track '));
+    $('ctx').appendChild(b);
+    $('ctx').appendChild(document.createTextNode(' · ' + n + ' CUE tags → Eos list ' + val('clist') +
+      (plan ? ' (' + plan.eosCount + ' cues)' : '')));
+  }
+  function fmtTime(s) {
+    if (s === null || s === undefined) return '';
+    var m = Math.floor(s / 60), r = (s - m * 60).toFixed(2);
+    return m + ':' + (r < 10 ? '0' : '') + r;
+  }
+  function row(cls, text, tail) {
+    var d = document.createElement('div'); d.className = 'op ' + cls; d.textContent = text;
+    if (tail) { var t = document.createElement('span'); t.className = 't'; t.textContent = '  ' + tail; d.appendChild(t); }
+    d.title = text + (tail ? '  ' + tail : '');
+    $('readout').appendChild(d);
+  }
+  function head(text) { var d = document.createElement('div'); d.className = 'hd'; d.textContent = text; $('readout').appendChild(d); }
+  function q(s) { return s ? '"' + s + '"' : '(no note)'; }
+  function renderCompare() {
+    if (!cmp) return;
+    head('Main ' + cmp.mainList + ' ↔ video ' + cmp.videoList + ': ' + cmp.matched + ' of ' + cmp.videoCount + ' matched');
+    if (!cmp.missing.length) row('ok', '✓ every video cue has a main cue with the same number');
+    cmp.missing.forEach(function (c) {
+      row('miss', '! Cue ' + cmp.videoList + '/' + c.num + '  ' + q(c.label), 'no cue ' + c.num + ' in main list ' + cmp.mainList);
+    });
+  }
+  function render() {
+    var box = $('readout'), L = val('clist');
+    box.innerHTML = '';
+    if (cmp) { renderCompare(); if (plan) head('—'); }
+    if (!plan && cmp) {
+      // the compare result is the readout for now
+    } else if (!plan) {
+      box.innerHTML = '<div class="empty">Press Refresh to compare the timeline with Eos.</div>';
+    } else {
+      var w = plan.adds.length + plan.relabels.length, d = plan.deletes.length;
+      if (!w && !d) row('empty', '✓ Eos list ' + L + ' matches the timeline. Nothing to do.');
+      if (w) head('Write will (' + w + ')');
+      plan.adds.forEach(function (a) {
+        row('add', '+ Cue ' + L + '/' + a.num + '  ' + q(a.label), 'XX ' + a.xx + ' YY ' + a.yy + ' ZZ ' + a.zz + ' · ' + fmtTime(a.time));
+      });
+      plan.relabels.forEach(function (r) {
+        row('lbl', '~ Cue ' + L + '/' + r.num + '  label ' + q(r.old) + ' → ' + q(r.label), fmtTime(r.time));
+      });
+      if (d) head('Delete will (' + d + ')');
+      plan.deletes.forEach(function (x) { row('del', '− Cue ' + L + '/' + x.num + '  ' + q(x.label), 'not on timeline'); });
+      if (plan.warnings.length) head('Skipped (' + plan.warnings.length + ')');
+      plan.warnings.forEach(function (x) { row('note', '! ' + x); });
+    }
+    $('write').textContent = 'Write' + (plan && (plan.adds.length + plan.relabels.length) ? ' (' + (plan.adds.length + plan.relabels.length) + ')' : '');
+    $('del').textContent = 'Delete' + (plan && plan.deletes.length ? ' (' + plan.deletes.length + ')' : '');
+    $('compare').textContent = 'Compare main list ' + val('mlist') + ' ↔ video list ' + val('clist');
+    disarm();
+    sync();
+  }
+  function sync() {
+    $('refresh').disabled = busy;
+    $('write').disabled = busy || !plan || !(plan.adds.length + plan.relabels.length);
+    $('del').disabled = busy || !plan || !plan.deletes.length;
+    $('test').disabled = busy;
+    $('after').disabled = busy;
+    $('compare').disabled = busy;
+  }
+
+  // ---- actions ------------------------------------------------------------
+  function link() { return [val('ip'), +val('port'), val('osc')]; }
+  function eosArgs() { return link().concat([val('clist')]); }
+  function need(keys) {
+    var bad = checkCfg(), miss = keys.filter(function (k) { return bad[k]; });
+    if (miss.length) { openSettings(true); log('✗ set ' + miss.join(', ') + ' in settings', 'bad'); return false; }
+    return true;
+  }
+  function setPlan(p, t) {
+    p.entries = t.entries; plan = p; track = t.track; sig = t.sig; tl = t;
+    showCtx(p.d3count); render();
+    if (!p.adds.length && !p.relabels.length && !p.deletes.length) markSynced(t.sig); else showWarn();
+  }
+  function refresh() {
+    if (busy || !need(['ip', 'clist', 'port'])) return Promise.resolve();
+    busy = true; sync();
+    log('Refresh: timeline vs ' + val('ip') + ' list ' + val('clist'), 'hd');
+    var t;
+    return readTimeline().then(function (x) {
+      t = x;
+      return job.apply(null, ['plan'].concat(eosArgs(), [t.entries]));
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.error);
+      setPlan(r, t);
+      log('  ' + r.d3count + ' timeline cues, ' + r.eosCount + ' Eos cues → ' + r.adds.length + ' add, ' +
+          r.relabels.length + ' label, ' + r.deletes.length + ' delete' +
+          (r.warnings.length ? ', ' + r.warnings.length + ' skipped' : ''), 'ok');
+    }).catch(function (e) { log('  ✗ ' + e.message, 'bad'); })
+      .then(function () { busy = false; sync(); });
+  }
+
+  // One job sends every op, then asks Eos about just the cues it touched.
+  // The Refresh that follows (finish) reads the new state.
+  function runOps(kind, expect) {
+    var t = tl;
+    var args = kind === 'write'
+      ? ['write'].concat(eosArgs(), [t.entries, val('chan'), userArg(), val('pxx'), val('pyy'), val('pzz'), expect, 0])
+      : ['delete'].concat(eosArgs(), [t.entries, userArg(), expect, 0]);
+    return job.apply(null, args).then(function (r) {
+      if (!r.ok) throw new Error(r.error);
+      log('  as Eos user ' + r.user + (localUser() ? ' (Eos local user)' : ''));
+      r.done.forEach(function (d) {
+        var bad = r.failed.some(function (f) { return f.num === d.num; });
+        log('  ' + (bad ? '✗ ' : '✓ ') + { add: '+', label: '~', 'delete': '−' }[d.op] + ' Cue ' + val('clist') + '/' + d.num +
+            (d.label ? '  "' + d.label + '"' : '') + (bad ? '  (not in Eos afterwards)' : ''), bad ? 'bad' : 'ok');
+      });
+      (r.eosErrors || []).forEach(function (e) { log('    Eos: ' + e, 'bad'); });
+      // A finished Write or Delete counts as a sync, even if the other one
+      // still has work (keeping extra Eos cues is a choice, not a mistake).
+      if (!r.failed.length && !r.left) markSynced(t.sig);
+      log('  ' + r.done.length + ' sent, ' + r.failed.length + ' failed', r.failed.length ? 'warn' : 'ok');
+      return r.done.length;
+    }, function (e) {
+      log('  ✗ ' + e.message, 'bad');
+      return 0;
+    });
+  }
+
+  // After a Write or Delete that sent anything: put the console's screen in
+  // the chosen mode, then Refresh, so the window never sits on a plan that is
+  // out of date (a refused second batch used to leave Write stuck, 27 Oct).
+  var after = store.get('ca.after') === 'blind' ? 'blind' : 'live';
+  function showAfter() {
+    $('after').textContent = '→ ' + after.toUpperCase();
+    $('after').className = after;
+    $('after').title = 'After Write / Delete, switch the Eos console to ' + after.toUpperCase() +
+      '. Click to switch to ' + (after === 'live' ? 'BLIND' : 'LIVE') + ' instead.';
+  }
+  $('after').onclick = function () {
+    after = after === 'live' ? 'blind' : 'live';
+    store.set('ca.after', after); showAfter();
+  };
+  showAfter();
+  function finish(sent) {
+    var go = !sent ? Promise.resolve() : job.apply(null, ['set_mode'].concat(link(), [after])).then(function (r) {
+      if (!r.ok) throw new Error(r.error);
+      log('  Eos → ' + after.toUpperCase() + (r.confirmed ? '' : ' (sent; Eos showed ' + (r.now || 'no change') + ')'),
+          r.confirmed ? 'ok' : 'warn');
+    }).catch(function (e) { log('  ✗ Eos → ' + after.toUpperCase() + ': ' + e.message, 'bad'); });
+    return go.then(function () { busy = false; eosNext = 0; return refresh(); });
+  }
+  function doWrite() {
+    if (busy || !plan || !need(['ip', 'clist', 'chan', 'port', 'user'])) return;
+    busy = true; sync();
+    log('Write to list ' + val('clist') + ' via chan ' + val('chan'), 'hd');
+    runOps('write', plan.writeHash).then(finish);
+  }
+  // Delete needs a second click within 4 s.
+  var armed = null;
+  function disarm() { clearTimeout(armed); armed = null; $('del').classList.remove('confirm'); }
+  function doDelete() {
+    if (busy || !plan || !plan.deletes.length || !need(['ip', 'clist', 'port', 'user'])) return;
+    if (!armed) {
+      $('del').classList.add('confirm');
+      $('del').textContent = 'Confirm (' + plan.deletes.length + ')';
+      armed = setTimeout(render, 4000);
+      return;
+    }
+    disarm();
+    busy = true; sync();
+    log('Delete from list ' + val('clist'), 'hd');
+    runOps('delete', plan.deleteHash).then(finish);
+  }
+  $('refresh').onclick = refresh;
+  $('write').onclick = doWrite;
+  $('del').onclick = doDelete;
+
+  // Read-only: main cue N against video cue N.
+  function doCompare() {
+    if (busy || !need(['ip', 'port', 'clist', 'mlist'])) return;
+    busy = true; sync();
+    log('Compare: main list ' + val('mlist') + ' ↔ video list ' + val('clist'), 'hd');
+    job.apply(null, ['compare'].concat(link(), [val('mlist'), val('clist')])).then(function (r) {
+      if (!r.ok) throw new Error(r.error);
+      cmp = r;
+      log('  ' + r.videoCount + ' video cues, ' + r.mainCount + ' main cues → ' + r.matched + ' matched, ' +
+          r.missing.length + ' missing in main', r.missing.length ? 'warn' : 'ok');
+    }).catch(function (e) { log('  ✗ ' + e.message, 'bad'); })
+      .then(function () { busy = false; render(); });
+  }
+  $('compare').onclick = doCompare;
+
+  $('test').onclick = function () {
+    if (busy || !need(['ip', 'port'])) return;
+    $('testMsg').textContent = 'connecting…'; $('testMsg').style.color = '';
+    job.apply(null, ['ping'].concat(link())).then(function (r) {
+      if (!r.ok) throw new Error(r.error);
+      $('testMsg').textContent = '✓ Eos ' + (r.version || '') + ' · ' + r.framing;
+      $('testMsg').style.color = 'var(--live)';
+    }).catch(function (e) {
+      $('testMsg').textContent = '✗ ' + e.message; $('testMsg').title = e.message; $('testMsg').style.color = 'var(--warn)';
+    });
+  };
+  $('probe').onclick = function () {
+    readTimeline().then(function (t) {
+      log('Probe ' + t.track + ' (REST): ' + t.tags.length + ' tags', 'hd');
+      t.tags.forEach(function (x) { log('  ' + x.time + 's  ' + x.type + ' "' + x.value + '"'); });
+      t.rows.forEach(function (x) { if (x.note) log('  ' + x.time + 's  note "' + x.note + '"'); });
+    }).catch(function (e) { log('✗ REST: ' + e.message, 'bad'); }).then(function () {
+      return call('probe');
+    }).then(function (r) {
+      if (!r.ok) { log('✗ ' + r.error, 'bad'); return; }
+      log('Probe ' + r.track + ' (Python): ' + r.entries.length + ' cue entries', 'hd');
+      r.entries.forEach(function (e) { log('  ' + e.time + '  read "' + e.read + '"  ' + JSON.stringify(e.tags)); });
+    }, function (e) { log('✗ ' + e.message, 'bad'); });
+  };
+
+  function connect() {
+    status('', 'connecting…');
+    return findApi(candidateBases())
+      .then(register)
+      .then(preferLoopback)
+      .then(function () { return call('info'); })
+      .then(function (i) {
+        if (!i.ok) throw new Error(i.error);
+        if (i.version !== VERSION) { $('ver').classList.add('stale'); $('ver').title = 'Window v' + VERSION + ', helper v' + i.version; }
+        log('connected to ' + (i.machine || '?') + (i.role ? ' (' + i.role + ')' : '') + ' at ' + (apiBase || location.origin) +
+            ' · ' + apiMs + ' ms per request');
+        if (apiMs > 500) log('  ! Designer answers slowly at that address; use its IP instead of a name', 'warn');
+        if (i.caps && !i.caps.socket) log('✗ Designer\'s Python has no socket module here: the plugin can\'t reach Eos', 'bad');
+        status('on', 'connected to ' + (i.machine || '?'));
+        if (!val('ip') || !/^\d+$/.test(val('chan'))) openSettings(true);
+        eosReady = true; poll(); showEos(); pollEos(true);
+      })
+      .catch(function (e) { status('err', 'Designer not reachable'); log('✗ ' + e.message, 'bad'); });
+  }
+  // If the director is this machine, use 127.0.0.1: by name each request
+  // cost ~4 s here (27 Oct). Same machine = same hostname in info().
+  var apiMs = 0;
+  function timeApi(base) {
+    var t = Date.now();
+    return http('GET', '/api/session/status/session', undefined, base).then(function () { return Date.now() - t; });
+  }
+  function preferLoopback() {
+    var m = /^https?:\/\/([^\/:]+)(:\d+)?/.exec(apiBase || location.origin) || [], host = (m[1] || '').toLowerCase();
+    var loop = 'http://127.0.0.1' + (m[2] || '');
+    if (!host || host === '127.0.0.1') return timeApi(apiBase).then(function (ms) { apiMs = ms; });
+    return Promise.all([call('info'), http('GET', '/api/session/status/session', undefined, loop).then(function () {
+      return http('POST', '/api/session/python/execute', { moduleName: mod, script: 'return info()' }, loop);
+    })]).then(function (both) {
+      var here = both[0], rv = both[1].returnValue;
+      try { rv = JSON.parse(rv); } catch (e) {}
+      if (rv && here.machine && rv.machine === here.machine) apiBase = loop;
+    }).catch(function () {}).then(function () { return timeApi(apiBase); }).then(function (ms) { apiMs = ms; });
+  }
+  function showTarget() { $('target').textContent = target === 'local' ? 'this PC' : 'director'; }
+  $('target').onclick = function () {
+    target = target === 'local' ? 'director' : 'local';
+    store.set('ca.target', target); showTarget(); plan = null; render(); connect();
+  };
+  showTarget(); checkCfg(); render();
+  connect();
+})();
+</script>
+</body>
+</html>
